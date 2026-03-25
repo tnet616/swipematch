@@ -7,7 +7,6 @@ import {
   Text,
   HStack,
   VStack,
-  Image,
   Icon,
   Button,
   Spinner,
@@ -16,16 +15,114 @@ import { FaFire, FaTrophy, FaRegHandPointer, FaCrown, FaUser } from "react-icons
 import { FiHome, FiUser } from "react-icons/fi";
 import { supabase } from "../../utils/supabase";
 import { useRouter } from "next/navigation";
+import { WallDialog } from "@/components/WallDialog"; // <-- Imported the Wall!
 
 export default function LeaderboardPage() {
   const [activeGender, setActiveGender] = useState<"Girls" | "Boys">("Girls");
   const [leaders, setLeaders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false); // Track if we should hide the Join button
+  const [showAuthWall, setShowAuthWall] = useState(false); // Control the profile wall
+
   const router = useRouter();
 
+  // Add this new state at the top with your other states:
+  const [isSpectator, setIsSpectator] = useState(false);
+
+  // 1. Update the floating button logic
+  const handleJoinRanking = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      // If they are logged in (Spectator), send them to Profile to flip the switch
+      router.push('/profile'); 
+    } else {
+      // If they are a guest, hit them with the wall
+      setShowAuthWall(true);
+    }
+  };
+
+  // 2. Update the useEffect to check for Spectator status
   useEffect(() => {
-    const fetchLeaderboard = async () => {
+    const fetchLeaderboardAndUser = async () => {
       setIsLoading(true);
+
+      // 1. Check User & Spectator Status
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        setIsLoggedIn(true);
+        const { data: userData } = await supabase
+          .from("users")
+          .select("elo_score")
+          .eq("id", user.id)
+          .single();
+
+        // FIX: Safely cast to Number and explicitly set true OR false
+        if (userData && Number(userData.elo_score) === 0) {
+          setIsSpectator(true);
+        } else {
+          setIsSpectator(false); // Ensures state resets if they join ranking!
+        }
+      } else {
+        setIsLoggedIn(false);
+        setIsSpectator(false); // Ensure guests are clean
+      }
+
+      // 2. Fetch Leaderboard Data
+      const genderFilter = activeGender === "Girls" ? "Female" : "Male";
+
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, name, photo_url, elo_score")
+        .eq("gender", genderFilter)
+        .order("elo_score", { ascending: false })
+        .limit(50);
+
+      if (data) {
+        setLeaders(data);
+      }
+      setIsLoading(false);
+    };
+
+    fetchLeaderboardAndUser();
+  }, [activeGender]);
+
+  // 3. Update the floating button condition near the bottom of your JSX:
+  {/* ONLY SHOWS FOR GUESTS OR SPECTATORS */}
+  {(isSpectator || !isLoggedIn) && (
+    <Box position="absolute" bottom="85px" left="0" w="100%" px={6}>
+      <Button
+        w="100%" h="16" borderRadius="xl" fontSize="xl" fontWeight="bold" color="white"
+        bgGradient="to-r" gradientFrom="orange.400" gradientTo="orange.500"
+        boxShadow="0px 10px 20px rgba(221, 107, 32, 0.3)"
+        _hover={{ opacity: 0.9, transform: "scale(0.98)" }}
+        transition="all 0.2s"
+        onClick={handleJoinRanking}
+      >
+        Join the Ranking 😎
+      </Button>
+    </Box>
+  )}
+
+  // 2. Smart Profile Click (Triggers the Wall for Guests)
+  const handleProfileClick = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      router.push('/profile');
+    } else {
+      setShowAuthWall(true);
+    }
+  };
+
+  useEffect(() => {
+    const fetchLeaderboardAndUser = async () => {
+      setIsLoading(true);
+
+      // Check user status to conditionally render the "Join Ranking" button
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setIsLoggedIn(true);
+
       const genderFilter = activeGender === "Girls" ? "Female" : "Male";
 
       // Fetch Top 50 users based on their Elo Score
@@ -42,7 +139,7 @@ export default function LeaderboardPage() {
       setIsLoading(false);
     };
 
-    fetchLeaderboard();
+    fetchLeaderboardAndUser();
   }, [activeGender]);
 
   return (
@@ -60,7 +157,7 @@ export default function LeaderboardPage() {
           <Flex 
             justify="center" align="center" w="10" h="10" 
             borderRadius="lg" border="1px solid" borderColor="gray.200"
-            cursor="pointer" onClick={() => router.push('/onboarding')}
+            cursor="pointer" onClick={handleProfileClick} // <-- Smart redirect here
           >
             <Icon as={FaUser} color="gray.600" />
           </Flex>
@@ -72,7 +169,7 @@ export default function LeaderboardPage() {
             Leaderboard
           </Text>
 
-          {/* Segmented Control (Mini version for Header) */}
+          {/* Segmented Control */}
           <Flex bg="white" border="1px solid" borderColor="gray.200" borderRadius="full" p={1} w="160px">
             <Flex
               flex={1} py={1} justify="center" align="center" borderRadius="full" cursor="pointer"
@@ -102,6 +199,9 @@ export default function LeaderboardPage() {
           ) : (
             leaders.map((user, index) => {
               const isFirst = index === 0;
+              const safeImageSrc = (user.photo_url && user.photo_url.trim() !== '') 
+                ? user.photo_url 
+                : 'https://images.unsplash.com/photo-1531123897727-8f129e1bfca8?w=500&q=80';
               
               return (
                 <Flex
@@ -117,55 +217,35 @@ export default function LeaderboardPage() {
                   borderColor={isFirst ? "pink.400" : "transparent"}
                 >
                   <HStack gap={4}>
-                    {/* Rank Number */}
-                    <Text 
-                      fontSize="2xl" 
-                      fontWeight="900" 
-                      color={isFirst ? "pink.400" : "gray.800"} 
-                      w="30px" 
-                      textAlign="center"
-                    >
+                    <Text fontSize="2xl" fontWeight="900" color={isFirst ? "pink.400" : "gray.800"} w="30px" textAlign="center">
                       {index + 1}
                     </Text>
 
-                    {/* Avatar with Crown for #1 */}
-                    <Box position="relative">
-                      <Image 
-                        src={user.photo_url || "https://via.placeholder.com/150"} 
-                        boxSize="50px" 
-                        borderRadius="xl" 
-                        objectFit="cover" 
+                    {/* Bulletproof Avatar Image */}
+                    <Box position="relative" w="50px" h="50px" borderRadius="xl" overflow="hidden">
+                      <img 
+                        src={safeImageSrc} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                         alt={user.name}
+                        onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1531123897727-8f129e1bfca8?w=500&q=80'; }}
                       />
                       {isFirst && (
                         <Icon 
-                          as={FaCrown} 
-                          color="yellow.400" 
-                          position="absolute" 
-                          top="-12px" 
-                          left="-10px" 
-                          boxSize={7} 
-                          transform="rotate(-20deg)" 
-                          style={{ filter: "drop-shadow(0px 2px 2px rgba(0,0,0,0.3))" }}
+                          as={FaCrown} color="yellow.400" position="absolute" top="-10px" left="-8px" 
+                          boxSize={7} transform="rotate(-20deg)" style={{ filter: "drop-shadow(0px 2px 2px rgba(0,0,0,0.3))" }}
                         />
                       )}
                     </Box>
 
-                    {/* Name */}
                     <Text fontWeight="bold" fontSize="lg" color="gray.900">
                       {user.name}
                     </Text>
                   </HStack>
 
-                  {/* Score */}
                   <HStack gap={1}>
                     <Icon as={FaFire} color="orange.500" />
-                    <Text fontWeight="900" color="gray.800">
-                      {Math.round(user.elo_score)}
-                    </Text>
-                    <Text fontSize="xs" color="gray.500" fontWeight="bold">
-                      swipes
-                    </Text>
+                    <Text fontWeight="900" color="gray.800">{Math.round(user.elo_score)}</Text>
+                    <Text fontSize="xs" color="gray.500" fontWeight="bold">swipes</Text>
                   </HStack>
                 </Flex>
               );
@@ -173,25 +253,24 @@ export default function LeaderboardPage() {
           )}
         </Box>
 
-        {/* 4. Floating "Join Ranking" Button */}
-        <Box position="absolute" bottom="85px" left="0" w="100%" px={6}>
-          <Button
-            w="100%" h="16" borderRadius="xl" fontSize="xl" fontWeight="bold" color="white"
-            bgGradient="to-r" gradientFrom="orange.400" gradientTo="orange.500"
-            boxShadow="0px 10px 20px rgba(221, 107, 32, 0.3)"
-            _hover={{ opacity: 0.9, transform: "scale(0.98)" }}
-            transition="all 0.2s"
-            onClick={() => router.push('/onboarding')}
-          >
-            Join the Ranking 😎
-          </Button>
-        </Box>
+        {/* 4. Floating "Join Ranking" Button (ONLY SHOWS FOR GUESTS) */}
+        {!isLoggedIn && (
+          <Box position="absolute" bottom="85px" left="0" w="100%" px={6}>
+            <Button
+              w="100%" h="16" borderRadius="xl" fontSize="xl" fontWeight="bold" color="white"
+              bgGradient="to-r" gradientFrom="orange.400" gradientTo="orange.500"
+              boxShadow="0px 10px 20px rgba(221, 107, 32, 0.3)"
+              _hover={{ opacity: 0.9, transform: "scale(0.98)" }}
+              transition="all 0.2s"
+              onClick={handleJoinRanking}
+            >
+              Join the Ranking 😎
+            </Button>
+          </Box>
+        )}
 
         {/* 5. Bottom Navigation */}
-        <Flex 
-          w="100%" h="70px" bg="white" justify="space-around" align="center" 
-          borderTop="1px solid" borderColor="gray.100" position="absolute" bottom="0" zIndex={10}
-        >
+        <Flex w="100%" h="70px" bg="white" justify="space-around" align="center" borderTop="1px solid" borderColor="gray.100" position="absolute" bottom="0" zIndex={10}>
           <VStack gap={1} color="gray.400" cursor="pointer" onClick={() => router.push('/')}>
             <Icon as={FiHome} boxSize={6} />
             <Text fontSize="10px" fontWeight="bold">Home</Text>
@@ -200,11 +279,14 @@ export default function LeaderboardPage() {
             <Icon as={FaTrophy} boxSize={6} />
             <Text fontSize="10px" fontWeight="bold">Live Ranking</Text>
           </VStack>
-          <VStack gap={1} color="gray.400" cursor="pointer">
+          <VStack gap={1} color="gray.400" cursor="pointer" onClick={handleProfileClick}> {/* <-- Smart redirect here */}
             <Icon as={FiUser} boxSize={6} />
             <Text fontSize="10px" fontWeight="bold">Profile</Text>
           </VStack>
         </Flex>
+
+        {/* 6. The Auth Wall Dialog for Guests */}
+        <WallDialog showWall={showAuthWall} />
 
       </Flex>
     </Flex>

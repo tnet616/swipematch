@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Box,
   Flex,
@@ -8,109 +8,245 @@ import {
   HStack,
   VStack,
   Button,
-  IconButton,
   Icon,
-  Spinner,
 } from "@chakra-ui/react";
 import { FaFire, FaTrophy, FaTimes, FaRegHandPointer } from "react-icons/fa";
 import { FiHome, FiUser } from "react-icons/fi";
 import { SwipeCard } from "../components/SwipeCard";
 import { useSwipeTracker } from "../hooks/useSwipeTracker";
 import { WallDialog } from "../components/WallDialog";
-import { OutOfFiresDialog } from "../components/OutOfFiresDialog";
+import OutOfFiresDialog from "@/components/OutOfFiresDialog";
 import { supabase } from "../utils/supabase";
 import { useRouter } from "next/navigation";
 
-// 1. A mock sponsored card to inject into the live deck
-const SPONSORED_CARD = {
-  id: "ad_dominos_01",
-  name: "Domino's Pizza 🍕 (Ad)",
-  photoUrl:
-    "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&q=80",
-  isAd: true,
-};
+// 1. DYNAMIC AD ENGINE DATA
+const SPONSORS = [
+  {
+    id: "ad_dominos",
+    name: "Domino's Pizza 🍕 (Ad)",
+    photoUrl:
+      "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&q=80",
+    isAd: true,
+  },
+  {
+    id: "ad_spotify",
+    name: "Spotify Student 🎧 (Ad)",
+    photoUrl:
+      "https://images.unsplash.com/photo-1611339555312-e607c83ce7f7?w=500&q=80",
+    isAd: true,
+  },
+  {
+    id: "ad_mtn",
+    name: "MTN Pulse 💛 (Ad)",
+    photoUrl:
+      "https://images.unsplash.com/photo-1534080532213-92c2db237196?w=500&q=80",
+    isAd: true,
+  },
+];
 
 export default function SwipePage() {
   const router = useRouter();
   const [hasStarted, setHasStarted] = useState(false);
-  const [profiles, setProfiles] = useState<any[]>([]);
   const [activeGender, setActiveGender] = useState<"Girls" | "Boys">("Girls");
 
-  // Phase 5 State Additions
-  const [isLoading, setIsLoading] = useState(true);
+  // 2. DUAL-DECK STATE (For instant tab switching)
+  const [decks, setDecks] = useState<{ Girls: any[]; Boys: any[] }>({
+    Girls: [],
+    Boys: [],
+  });
+  const [loadingState, setLoadingState] = useState({
+    Girls: false,
+    Boys: false,
+  });
+
+  const fetchedIds = useRef<Set<string>>(new Set()); // Prevents fetching duplicates
+  const exhaustedDecks = useRef({ Girls: false, Boys: false }); // Stops fetching if DB is empty
+  const lastKnownFireCount = useRef<number | null>(null); // Track last confirmed fire count from DB
+
   const [userFireCount, setUserFireCount] = useState<number | null>(null);
   const [showFireModal, setShowFireModal] = useState(false);
+  const [showAuthWall, setShowAuthWall] = useState(false);
 
-  const { remainingSwipes, showWall, recordSwipe } = useSwipeTracker();
+  const { remainingSwipes, showWall, setShowWall, recordSwipe } =
+    useSwipeTracker();
 
-  // ==========================================
-  // FETCH LIVE DATA FROM SUPABASE
-  // ==========================================
+  // Check Login Status on Mount and reset refs
   useEffect(() => {
-    const fetchLiveDeck = async () => {
-      setIsLoading(true);
+    // Clear refs on mount to start fresh
+    fetchedIds.current = new Set();
+    exhaustedDecks.current = { Girls: false, Boys: false };
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setHasStarted(true);
+    });
+  }, []);
+
+  // Fetch Fire Count and Subscribe to Real-Time Updates
+  useEffect(() => {
+    let subscription: any = null;
+
+    const setupFireCountSubscription = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      if (!user) return;
 
-      if (user) {
-        // Fetch their current Fire stash
-        const { data: userData } = await supabase
+      // Initial fetch
+      try {
+        const { data, error } = await supabase
           .from("users")
           .select("fire_count")
           .eq("id", user.id)
           .single();
-        if (userData) setUserFireCount(userData.fire_count);
-      }
-
-      // Map UI toggle to database values
-      const genderFilter = activeGender === "Girls" ? "Female" : "Male";
-
-      // Fetch 10 random profiles from the database
-      const { data: rawDeck, error } = await supabase
-        .from("users")
-        .select("id, name, photo_url")
-        .eq("gender", genderFilter)
-        .neq("id", user?.id || "00000000-0000-0000-0000-000000000000") // Don't show themselves
-        .limit(10);
-
-      if (rawDeck && rawDeck.length > 0) {
-        let formattedDeck = rawDeck.map((p) => ({
-          id: p.id,
-          name: p.name,
-          photoUrl:
-            p.photo_url ||
-            "https://images.unsplash.com/photo-1531123897727-8f129e1bfca8?w=500&q=80", // fallback
-        }));
-
-        // Inject the Sponsored Card at index 1 so they see it early
-        if (formattedDeck.length > 1) {
-          formattedDeck.splice(1, 0, SPONSORED_CARD);
+        if (error) throw error;
+        if (data) {
+          setUserFireCount(data.fire_count);
+          lastKnownFireCount.current = data.fire_count;
         }
-
-        // Reverse so the first item in the array renders on TOP of the visual stack
-        setProfiles(formattedDeck.reverse());
-      } else {
-        setProfiles([]);
+      } catch (error) {
+        console.error("Failed to fetch fire count:", error);
       }
-      setIsLoading(false);
+
+      // Subscribe to real-time updates
+      subscription = supabase
+        .channel(`user_${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "users",
+            filter: `id=eq.${user.id}`,
+          },
+          (payload) => {
+            if (payload.new && typeof payload.new.fire_count === "number") {
+              // Only update if the server value changed, ensuring UI doesn't revert optimistic updates
+              if (payload.new.fire_count !== lastKnownFireCount.current) {
+                setUserFireCount(payload.new.fire_count);
+                lastKnownFireCount.current = payload.new.fire_count;
+              }
+            }
+          },
+        )
+        .subscribe();
     };
 
     if (hasStarted) {
-      fetchLiveDeck();
+      setupFireCountSubscription();
     }
-  }, [activeGender, hasStarted]);
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, [hasStarted]);
+
+  // ==========================================
+  // THE PRELOAD ENGINE
+  // ==========================================
+  const loadMoreProfiles = async (gender: "Girls" | "Boys") => {
+    if (exhaustedDecks.current[gender] || loadingState[gender]) return;
+
+    setLoadingState((prev) => ({ ...prev, [gender]: true }));
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const dbGender = gender === "Girls" ? "Female" : "Male";
+
+    let query = supabase
+      .from("users")
+      .select("id, name, photo_url")
+      .eq("gender", dbGender)
+      .neq("id", user?.id || "00000000-0000-0000-0000-000000000000");
+
+    let excludeIds = Array.from(fetchedIds.current);
+
+    if (user) {
+      const { data: previousSwipes } = await supabase
+        .from("swipes")
+        .select("target_id")
+        .eq("swiper_id", user.id);
+      if (previousSwipes)
+        previousSwipes.forEach((s) => excludeIds.push(s.target_id));
+    }
+
+    if (excludeIds.length > 0) {
+      query = query.not("id", "in", `(${excludeIds.join(",")})`);
+    }
+
+    const { data: rawDeck } = await query.limit(10);
+
+    if (!rawDeck || rawDeck.length === 0) {
+      exhaustedDecks.current[gender] = true;
+    } else {
+      // Shuffle the deck to randomize order
+      const shuffledDeck = [...rawDeck].sort(() => Math.random() - 0.5);
+      shuffledDeck.forEach((p) => fetchedIds.current.add(p.id));
+
+      let formattedDeck = shuffledDeck.map((p) => ({
+        id: p.id,
+        name: p.name,
+        photoUrl:
+          p.photo_url ||
+          "https://images.unsplash.com/photo-1531123897727-8f129e1bfca8?w=500&q=80",
+      }));
+
+      // 3. THE SMART AD ALGORITHM
+      // Only inject an ad if the batch is large enough, and put it in a random spot
+      if (formattedDeck.length > 3) {
+        const randomSponsor =
+          SPONSORS[Math.floor(Math.random() * SPONSORS.length)];
+        const adCard = {
+          ...randomSponsor,
+          id: `${randomSponsor.id}_${Date.now()}`,
+        }; // Unique ID so React doesn't crash on duplicates
+        const insertIndex =
+          Math.floor(Math.random() * (formattedDeck.length - 2)) + 1; // Never the very top card
+        formattedDeck.splice(insertIndex, 0, adCard);
+      }
+
+      // Add new cards to the BOTTOM of the deck (which is the start of the array in our visual stack)
+      setDecks((prev) => {
+        // DEDUPLICATION FIX: Extract IDs currently in the deck
+        const existingIds = new Set(prev[gender].map((card) => card.id));
+
+        // Filter out any incoming cards that are already in the state
+        const safeNewDeck = formattedDeck.filter(
+          (card) => !existingIds.has(card.id),
+        );
+
+        return {
+          ...prev,
+          [gender]: [...safeNewDeck.reverse(), ...prev[gender]],
+        };
+      });
+    }
+
+    setLoadingState((prev) => ({ ...prev, [gender]: false }));
+  };
+
+  // Initial Load of BOTH decks in the background
+  useEffect(() => {
+    if (hasStarted) {
+      if (decks.Girls.length === 0) loadMoreProfiles("Girls");
+      if (decks.Boys.length === 0) loadMoreProfiles("Boys");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasStarted]);
 
   // ==========================================
   // SECURE SWIPE LOGIC
   // ==========================================
   const handleSwipe = async (targetId: string, action: "fire" | "pass") => {
-    // Is it the Sponsored Card?
+    // 1. Is it an Ad?
     if (targetId.startsWith("ad_")) {
-      if (action === "fire") {
-        console.log("User Fired the Ad! Redirecting to promo code...");
-      }
-      setProfiles((prev) => prev.filter((p) => p.id !== targetId));
+      if (action === "fire") console.log("User Fired the Ad! Redirecting...");
+      setDecks((prev) => ({
+        ...prev,
+        [activeGender]: prev[activeGender].filter((p) => p.id !== targetId),
+      }));
       return;
     }
 
@@ -118,45 +254,138 @@ export default function SwipePage() {
       data: { user },
     } = await supabase.auth.getUser();
 
+    // 2. Auth Limits Check
     if (!user) {
-      // GUEST FLOW
       const allowed = recordSwipe(targetId, action);
-      if (allowed) setProfiles((prev) => prev.filter((p) => p.id !== targetId));
+      if (!allowed) return;
     } else {
-      // AUTHENTICATED FLOW
       if (action === "fire") {
         if (userFireCount !== null && userFireCount <= 0) {
-          setShowFireModal(true); // Trigger Paywall
-          return; // Stop the swipe from happening!
+          setShowFireModal(true);
+          return;
         }
-        setUserFireCount((prev) => (prev || 0) - 1); // Optimistic UI update
+        // Optimistically decrement and track it
+        const newCount = (userFireCount || 0) - 1;
+        setUserFireCount(newCount);
+        lastKnownFireCount.current = newCount;
+      }
+    }
+
+    // 3. Optimistic UI Update & Preload Trigger
+    setDecks((prev) => {
+      const updatedDeck = prev[activeGender].filter((p) => p.id !== targetId);
+
+      // If they are down to their last 4 cards, fetch more in the background!
+      if (updatedDeck.length <= 4 && !loadingState[activeGender]) {
+        setTimeout(() => loadMoreProfiles(activeGender), 0);
       }
 
-      setProfiles((prev) => prev.filter((p) => p.id !== targetId));
+      return { ...prev, [activeGender]: updatedDeck };
+    });
 
-      // Fire off to the database silently
+    // 4. Database Call
+    if (user) {
       supabase
         .rpc("handle_swipe", {
           p_swiper_id: user.id,
           p_target_id: targetId,
           p_is_fire: action === "fire",
         })
-        .then(({ error }) => {
-          if (error) console.error("Swipe failed:", error);
+        .then(async ({ error }: any) => {
+          if (error) {
+            console.error("Swipe failed:", error);
+            // Revert optimistic UI update on failure
+            if (action === "fire") {
+              const oldCount = (lastKnownFireCount.current || 0) + 1;
+              setUserFireCount(oldCount);
+              lastKnownFireCount.current = oldCount;
+            }
+            setDecks((prev) => ({
+              ...prev,
+              [activeGender]: [
+                decks[activeGender][decks[activeGender].length - 1],
+                ...prev[activeGender],
+              ],
+            }));
+          } else if (action === "fire") {
+            // On success, verify the fire count was decremented in DB
+            try {
+              const { data } = await supabase
+                .from("users")
+                .select("fire_count")
+                .eq("id", user.id)
+                .single();
+              if (data && typeof data.fire_count === "number") {
+                lastKnownFireCount.current = data.fire_count;
+                setUserFireCount(data.fire_count);
+              }
+            } catch (err) {
+              console.error("Failed to verify fire count:", err);
+            }
+          }
         });
     }
   };
 
-  const handleWatchAd = () => {
-    console.log("Playing Video Ad...");
-    setTimeout(() => {
-      setUserFireCount((prev) => (prev || 0) + 5);
-      setShowFireModal(false);
-    }, 2000);
+  const handleReward = async (amount: number) => {
+    // 1. Optimistic UI update instantly gives them the fires
+    setUserFireCount((prev) => (prev || 0) + amount);
+    setShowFireModal(false);
+
+    // 2. Securely update the database in the background
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data, error: fetchError } = await supabase
+          .from("users")
+          .select("fire_count")
+          .eq("id", user.id)
+          .single();
+        if (fetchError) throw fetchError;
+        if (data) {
+          const { error: updateError } = await supabase
+            .from("users")
+            .update({ fire_count: data.fire_count + amount })
+            .eq("id", user.id);
+          if (updateError) throw updateError;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update fire count:", error);
+      // Revert optimistic update on failure
+      setUserFireCount((prev) => (prev || 0) - amount);
+    }
   };
 
   const displaySwipes =
     userFireCount !== null ? userFireCount : remainingSwipes;
+  const currentDeck = decks[activeGender];
+  const isCurrentlyLoading = loadingState[activeGender];
+
+  const handleProfileClick = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) router.push("/profile");
+    else setShowAuthWall(true);
+  };
+
+  const handleJoinRanking = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+      if (profile) router.push("/profile");
+      else router.push("/onboarding");
+    } else setShowAuthWall(true);
+  };
 
   // ==========================================
   // VIEW 1: LANDING PAGE
@@ -222,12 +451,13 @@ export default function SwipePage() {
               gradientFrom="orange.400"
               gradientTo="orange.500"
               _hover={{ opacity: 0.9 }}
-              onClick={() => router.push("/onboarding")}
+              onClick={handleJoinRanking}
             >
               Join the Ranking 😎
             </Button>
           </VStack>
         </Flex>
+        <WallDialog showWall={showAuthWall} />
       </Flex>
     );
   }
@@ -245,7 +475,6 @@ export default function SwipePage() {
       justify="space-between"
       pb={6}
     >
-      {/* Header & Toggle */}
       <VStack w="100%" maxW="md" px={4} pt={10} gap={6}>
         <Flex
           bg="white"
@@ -278,8 +507,9 @@ export default function SwipePage() {
             align="center"
             borderRadius="full"
             cursor="pointer"
-            bg={activeGender === "Boys" ? "transparent" : "transparent"}
-            color={activeGender === "Boys" ? "gray.800" : "gray.500"}
+            bg={activeGender === "Boys" ? "blue.400" : "transparent"}
+            color={activeGender === "Boys" ? "white" : "gray.500"}
+            boxShadow={activeGender === "Boys" ? "sm" : "none"}
             onClick={() => setActiveGender("Boys")}
           >
             <Text fontWeight="bold" fontSize="sm">
@@ -289,32 +519,38 @@ export default function SwipePage() {
         </Flex>
       </VStack>
 
-      {/* The Card Stack */}
       <Box w="100%" maxW="md" flex={1} position="relative" mt={6} px={4}>
-        {isLoading ? (
-          <Flex
+        {/* THE NEW SKELETON LOADER */}
+        {isCurrentlyLoading && currentDeck.length === 0 ? (
+          <Box
+            w="100%"
             h="100%"
-            align="center"
-            justify="center"
-            direction="column"
-            gap={4}
+            borderRadius="3xl"
+            bg="gray.100"
+            overflow="hidden"
+            position="absolute"
+            top={0}
+            left={0}
+            css={{ animation: "pulse 1.5s infinite" }}
           >
-            <Spinner color="pink.400" size="xl" />
-            <Text color="gray.500" fontWeight="bold">
-              Loading live campus deck...
-            </Text>
-          </Flex>
+            <Box w="100%" h="80%" bg="gray.200" />
+            <Flex p={5} h="20%" align="center" bg="white">
+              <Box w="60%" h="8" bg="gray.200" borderRadius="md" />
+            </Flex>
+          </Box>
         ) : (
-          profiles.map((profile, index) => (
+          currentDeck.map((profile, index) => (
             <SwipeCard
               key={profile.id}
               profile={profile}
               onSwipe={handleSwipe}
-              isTopCard={index === profiles.length - 1}
+              isTopCard={index === currentDeck.length - 1}
             />
           ))
         )}
-        {!isLoading && profiles.length === 0 && (
+
+        {/* EMPTY STATE */}
+        {!isCurrentlyLoading && currentDeck.length === 0 && (
           <Flex
             h="100%"
             align="center"
@@ -329,7 +565,6 @@ export default function SwipePage() {
         )}
       </Box>
 
-      {/* The Action Row */}
       <HStack
         w="100%"
         maxW="md"
@@ -352,8 +587,8 @@ export default function SwipePage() {
           _active={{ transform: "scale(0.95)" }}
           transition="0.1s"
           onClick={() => {
-            if (profiles.length > 0)
-              handleSwipe(profiles[profiles.length - 1].id, "pass");
+            if (currentDeck.length > 0)
+              handleSwipe(currentDeck[currentDeck.length - 1].id, "pass");
           }}
         >
           <Icon as={FaTimes} boxSize={8} color="#E53E3E" />
@@ -373,7 +608,7 @@ export default function SwipePage() {
             </Text>
           </Flex>
           <Text fontSize="xs" color="gray.500" fontWeight="bold" mt={1}>
-            swipes left
+            {userFireCount !== null ? "fires left 🔥" : "swipes left"}
           </Text>
         </VStack>
 
@@ -391,15 +626,14 @@ export default function SwipePage() {
           _active={{ transform: "scale(0.95)" }}
           transition="0.1s"
           onClick={() => {
-            if (profiles.length > 0)
-              handleSwipe(profiles[profiles.length - 1].id, "fire");
+            if (currentDeck.length > 0)
+              handleSwipe(currentDeck[currentDeck.length - 1].id, "fire");
           }}
         >
           <Icon as={FaFire} boxSize={8} color="#DD6B20" />
         </Flex>
       </HStack>
 
-      {/* Bottom Navigation */}
       <Flex
         w="100%"
         maxW="md"
@@ -426,7 +660,12 @@ export default function SwipePage() {
             Live Ranking
           </Text>
         </VStack>
-        <VStack gap={1} color="gray.400" cursor="pointer">
+        <VStack
+          gap={1}
+          color="gray.400"
+          cursor="pointer"
+          onClick={handleProfileClick}
+        >
           <Icon as={FiUser} boxSize={6} />
           <Text fontSize="10px" fontWeight="bold">
             Profile
@@ -434,12 +673,11 @@ export default function SwipePage() {
         </VStack>
       </Flex>
 
-      {/* Modals */}
-      <WallDialog showWall={showWall} />
+      <WallDialog showWall={showWall || showAuthWall} />
       <OutOfFiresDialog
         isOpen={showFireModal}
         onClose={() => setShowFireModal(false)}
-        onWatchAd={handleWatchAd}
+        onReward={handleReward}
       />
     </Flex>
   );

@@ -41,5 +41,5 @@ export const useSwipeTracker = () => {
 
   const remainingSwipes = MAX_FREE_SWIPES - swipeCount;
 
-  return { swipeCount, remainingSwipes, pendingVotes, showWall, recordSwipe };
+  return { swipeCount, remainingSwipes, pendingVotes, showWall, setShowWall, recordSwipe };
 };
