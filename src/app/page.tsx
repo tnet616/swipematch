@@ -19,7 +19,9 @@ import OutOfFiresDialog from "@/components/OutOfFiresDialog";
 import { supabase } from "../utils/supabase";
 import { useRouter } from "next/navigation";
 
-// 1. DYNAMIC AD ENGINE DATA
+// ==========================================
+// DYNAMIC AD ENGINE DATA
+// ==========================================
 const SPONSORS = [
   {
     id: "ad_dominos",
@@ -49,7 +51,7 @@ export default function SwipePage() {
   const [hasStarted, setHasStarted] = useState(false);
   const [activeGender, setActiveGender] = useState<"Girls" | "Boys">("Girls");
 
-  // 2. DUAL-DECK STATE (For instant tab switching)
+  // DUAL-DECK STATE (For instant tab switching)
   const [decks, setDecks] = useState<{ Girls: any[]; Boys: any[] }>({
     Girls: [],
     Boys: [],
@@ -61,7 +63,6 @@ export default function SwipePage() {
 
   const fetchedIds = useRef<Set<string>>(new Set()); // Prevents fetching duplicates
   const exhaustedDecks = useRef({ Girls: false, Boys: false }); // Stops fetching if DB is empty
-  const lastKnownFireCount = useRef<number | null>(null); // Track last confirmed fire count from DB
 
   const [userFireCount, setUserFireCount] = useState<number | null>(null);
   const [showFireModal, setShowFireModal] = useState(false);
@@ -70,9 +71,8 @@ export default function SwipePage() {
   const { remainingSwipes, showWall, setShowWall, recordSwipe } =
     useSwipeTracker();
 
-  // Check Login Status on Mount and reset refs
+  // 1. Check Login Status on Mount
   useEffect(() => {
-    // Clear refs on mount to start fresh
     fetchedIds.current = new Set();
     exhaustedDecks.current = { Girls: false, Boys: false };
 
@@ -81,69 +81,37 @@ export default function SwipePage() {
     });
   }, []);
 
-  // Fetch Fire Count and Subscribe to Real-Time Updates
+  // 2. Fetch Fire Count ONCE on Mount
   useEffect(() => {
-    let subscription: any = null;
-
-    const setupFireCountSubscription = async () => {
+    const fetchFires = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Initial fetch
       try {
         const { data, error } = await supabase
           .from("users")
           .select("fire_count")
           .eq("id", user.id)
           .single();
+
         if (error) throw error;
-        if (data) {
+        if (data && typeof data.fire_count === "number") {
           setUserFireCount(data.fire_count);
-          lastKnownFireCount.current = data.fire_count;
         }
       } catch (error) {
         console.error("Failed to fetch fire count:", error);
       }
-
-      // Subscribe to real-time updates
-      subscription = supabase
-        .channel(`user_${user.id}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "users",
-            filter: `id=eq.${user.id}`,
-          },
-          (payload) => {
-            if (payload.new && typeof payload.new.fire_count === "number") {
-              // Only update if the server value changed, ensuring UI doesn't revert optimistic updates
-              if (payload.new.fire_count !== lastKnownFireCount.current) {
-                setUserFireCount(payload.new.fire_count);
-                lastKnownFireCount.current = payload.new.fire_count;
-              }
-            }
-          },
-        )
-        .subscribe();
     };
 
     if (hasStarted) {
-      setupFireCountSubscription();
+      fetchFires();
     }
-
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe();
-      }
-    };
   }, [hasStarted]);
 
   // ==========================================
-  // THE PRELOAD ENGINE
+  // THE PRELOAD ENGINE & DEDUPLICATION
   // ==========================================
   const loadMoreProfiles = async (gender: "Girls" | "Boys") => {
     if (exhaustedDecks.current[gender] || loadingState[gender]) return;
@@ -168,8 +136,9 @@ export default function SwipePage() {
         .from("swipes")
         .select("target_id")
         .eq("swiper_id", user.id);
-      if (previousSwipes)
+      if (previousSwipes) {
         previousSwipes.forEach((s) => excludeIds.push(s.target_id));
+      }
     }
 
     if (excludeIds.length > 0) {
@@ -193,26 +162,22 @@ export default function SwipePage() {
           "https://images.unsplash.com/photo-1531123897727-8f129e1bfca8?w=500&q=80",
       }));
 
-      // 3. THE SMART AD ALGORITHM
-      // Only inject an ad if the batch is large enough, and put it in a random spot
+      // Inject Sponsor Ad randomly
       if (formattedDeck.length > 3) {
         const randomSponsor =
           SPONSORS[Math.floor(Math.random() * SPONSORS.length)];
         const adCard = {
           ...randomSponsor,
           id: `${randomSponsor.id}_${Date.now()}`,
-        }; // Unique ID so React doesn't crash on duplicates
+        };
         const insertIndex =
-          Math.floor(Math.random() * (formattedDeck.length - 2)) + 1; // Never the very top card
+          Math.floor(Math.random() * (formattedDeck.length - 2)) + 1;
         formattedDeck.splice(insertIndex, 0, adCard);
       }
 
-      // Add new cards to the BOTTOM of the deck (which is the start of the array in our visual stack)
+      // Add new cards to the deck with STRICT DEDUPLICATION
       setDecks((prev) => {
-        // DEDUPLICATION FIX: Extract IDs currently in the deck
         const existingIds = new Set(prev[gender].map((card) => card.id));
-
-        // Filter out any incoming cards that are already in the state
         const safeNewDeck = formattedDeck.filter(
           (card) => !existingIds.has(card.id),
         );
@@ -227,7 +192,7 @@ export default function SwipePage() {
     setLoadingState((prev) => ({ ...prev, [gender]: false }));
   };
 
-  // Initial Load of BOTH decks in the background
+  // Initial Load of BOTH decks
   useEffect(() => {
     if (hasStarted) {
       if (decks.Girls.length === 0) loadMoreProfiles("Girls");
@@ -254,7 +219,7 @@ export default function SwipePage() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // 2. Auth Limits Check
+    // 2. Auth Limits Check & Optimistic Math
     if (!user) {
       const allowed = recordSwipe(targetId, action);
       if (!allowed) return;
@@ -264,10 +229,8 @@ export default function SwipePage() {
           setShowFireModal(true);
           return;
         }
-        // Optimistically decrement and track it
-        const newCount = (userFireCount || 0) - 1;
-        setUserFireCount(newCount);
-        lastKnownFireCount.current = newCount;
+        // Optimistically decrement safely
+        setUserFireCount((prev) => (prev !== null ? prev - 1 : 0));
       }
     }
 
@@ -283,7 +246,7 @@ export default function SwipePage() {
       return { ...prev, [activeGender]: updatedDeck };
     });
 
-    // 4. Database Call
+    // 4. Database Call (Fire and Forget)
     if (user) {
       supabase
         .rpc("handle_swipe", {
@@ -291,14 +254,12 @@ export default function SwipePage() {
           p_target_id: targetId,
           p_is_fire: action === "fire",
         })
-        .then(async ({ error }: any) => {
+        .then(({ error }: any) => {
           if (error) {
             console.error("Swipe failed:", error);
-            // Revert optimistic UI update on failure
+            // Revert optimistic UI update only if it completely failed
             if (action === "fire") {
-              const oldCount = (lastKnownFireCount.current || 0) + 1;
-              setUserFireCount(oldCount);
-              lastKnownFireCount.current = oldCount;
+              setUserFireCount((prev) => (prev !== null ? prev + 1 : 1));
             }
             setDecks((prev) => ({
               ...prev,
@@ -307,29 +268,17 @@ export default function SwipePage() {
                 ...prev[activeGender],
               ],
             }));
-          } else if (action === "fire") {
-            // On success, verify the fire count was decremented in DB
-            try {
-              const { data } = await supabase
-                .from("users")
-                .select("fire_count")
-                .eq("id", user.id)
-                .single();
-              if (data && typeof data.fire_count === "number") {
-                lastKnownFireCount.current = data.fire_count;
-                setUserFireCount(data.fire_count);
-              }
-            } catch (err) {
-              console.error("Failed to verify fire count:", err);
-            }
           }
         });
     }
   };
 
+  // ==========================================
+  // REWARD LOGIC
+  // ==========================================
   const handleReward = async (amount: number) => {
     // 1. Optimistic UI update instantly gives them the fires
-    setUserFireCount((prev) => (prev || 0) + amount);
+    setUserFireCount((prev) => (prev !== null ? prev + amount : amount));
     setShowFireModal(false);
 
     // 2. Securely update the database in the background
@@ -343,19 +292,22 @@ export default function SwipePage() {
           .select("fire_count")
           .eq("id", user.id)
           .single();
+
         if (fetchError) throw fetchError;
+
         if (data) {
           const { error: updateError } = await supabase
             .from("users")
             .update({ fire_count: data.fire_count + amount })
             .eq("id", user.id);
+
           if (updateError) throw updateError;
         }
       }
     } catch (error) {
       console.error("Failed to update fire count:", error);
-      // Revert optimistic update on failure
-      setUserFireCount((prev) => (prev || 0) - amount);
+      // Revert optimistic update on critical failure
+      setUserFireCount((prev) => (prev !== null ? prev - amount : 0));
     }
   };
 
