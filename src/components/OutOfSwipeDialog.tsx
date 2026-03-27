@@ -13,6 +13,8 @@ import {
   Spinner,
   Image,
   Flex,
+  Drawer,
+  Portal
 } from "@chakra-ui/react";
 import { FaPlay, FaPoll, FaClock, FaCheckCircle } from "react-icons/fa";
 import { supabase } from "../utils/supabase";
@@ -404,440 +406,523 @@ export default function OutOfSwipeDialog({
   };
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={(e) => !e.open && handleClose()}>
-      <Dialog.Backdrop backdropFilter="blur(8px)" bg="blackAlpha.600" />
-      <Dialog.Positioner>
-        <Dialog.Content
-          p={6}
-          textAlign="center"
-          borderRadius="3xl"
-          mx={4}
-          bg="white"
-          w="calc(100vw - 32px)"
-          maxW="sm"
-        >
-          {/* ========================================== */}
-          {/* VIEW 1: THE MAIN MENU */}
-          {/* ========================================== */}
-          {view === "menu" && (
-            <>
-              <Dialog.Header pt={2}>
-                <Dialog.Title fontSize="2xl" fontWeight="900" color="gray.900">
-                  Out of Swipes ⚡
-                </Dialog.Title>
-              </Dialog.Header>
-              <Dialog.Body pb={2}>
-                <Text mb={6} color="gray.500" fontWeight="medium" fontSize="sm">
-                  You've used your daily allowance! Refill your stamina to keep
-                  discovering campus.
-                </Text>
-
-                <VStack gap={3} w="100%">
-                  <Button
-                    w="100%"
-                    h="14"
-                    borderRadius="xl"
-                    bg="gray.900"
-                    color="white"
-                    _hover={{ bg: "gray.800", transform: "scale(0.98)" }}
-                    onClick={triggerAd}
+    <>
+      <Dialog.Root open={isOpen} onOpenChange={(e) => !e.open && handleClose()}>
+        <Dialog.Backdrop backdropFilter="blur(8px)" bg="blackAlpha.600" />
+        <Dialog.Positioner>
+          <Dialog.Content
+            p={6}
+            textAlign="center"
+            borderRadius="3xl"
+            mx={4}
+            bg="white"
+            w="calc(100vw - 32px)"
+            maxW="sm"
+          >
+            {/* ========================================== */}
+            {/* VIEW 1: THE MAIN MENU */}
+            {/* ========================================== */}
+            {view === "menu" && (
+              <>
+                <Dialog.Header pt={2}>
+                  <Dialog.Title
+                    fontSize="2xl"
+                    fontWeight="900"
+                    color="gray.900"
                   >
-                    <Icon as={FaPlay} color="pink.400" mr={3} />
-                    Watch Ad (+{ECONOMY.AD_REWARD} ⚡)
-                  </Button>
-
-                  <Button
-                    w="100%"
-                    h="14"
-                    borderRadius="xl"
-                    bg="gray.100"
-                    color={availableSurvey ? "gray.800" : "gray.400"}
-                    _hover={
-                      availableSurvey
-                        ? { bg: "gray.200", transform: "scale(0.98)" }
-                        : {}
-                    }
-                    onClick={() => setView("poll")}
-                    disabled={!availableSurvey || isCheckingSurveys}
+                    Out of Swipes ⚡
+                  </Dialog.Title>
+                </Dialog.Header>
+                <Dialog.Body pb={2}>
+                  <Text
+                    mb={6}
+                    color="gray.500"
+                    fontWeight="medium"
+                    fontSize="sm"
                   >
-                    <Icon
-                      as={FaPoll}
-                      color={availableSurvey ? "blue.400" : "gray.400"}
-                      mr={3}
-                    />
-                    {/* Updated Reward logic */}
-                    {isCheckingSurveys
-                      ? "Checking Polls..."
-                      : availableSurvey
-                        ? `Take Campus Poll (+${availableSurvey.reward} ⚡)`
-                        : "No more polls available"}
-                  </Button>
-
-                  <HStack
-                    mt={4}
-                    color="gray.400"
-                    fontSize="xs"
-                    fontWeight="bold"
-                    justify="center"
-                  >
-                    <Icon as={FaClock} />
-                    <Text>Free refill in {timeLeft}</Text>
-                  </HStack>
-                </VStack>
-              </Dialog.Body>
-            </>
-          )}
-
-          {/* ========================================== */}
-          {/* VIEW 2: THE AD VIEWER */}
-          {/* ========================================== */}
-          {view === "ad" && activeAd && (
-            <VStack gap={4}>
-              <Text fontSize="lg" fontWeight="900">
-                Sponsor Message
-              </Text>
-
-              <Box
-                w="100%"
-                h="250px"
-                borderRadius="xl"
-                overflow="hidden"
-                position="relative"
-                bg="gray.100"
-              >
-                {/* RENDER IMAGE */}
-                {activeAd.type === "image" && (
-                  <Image
-                    src={activeAd.src}
-                    objectFit="cover"
-                    w="100%"
-                    h="100%"
-                  />
-                )}
-
-                {/* RENDER VIDEO */}
-                {activeAd.type === "video" && (
-                  <video
-                    src={activeAd.src}
-                    autoPlay
-                    muted
-                    playsInline
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                )}
-
-                {/* RENDER ADSENSE (Placeholder logic) */}
-                {activeAd.type === "adsense" && (
-                  <Flex
-                    w="100%"
-                    h="100%"
-                    align="center"
-                    justify="center"
-                    direction="column"
-                    bg="gray.50"
-                  >
-                    <Text color="gray.400" fontSize="sm">
-                      Google AdSense Space
-                    </Text>
-                  </Flex>
-                )}
-
-                {/* OVERLAY TIMER */}
-                <Flex
-                  position="absolute"
-                  top={2}
-                  right={2}
-                  bg="blackAlpha.700"
-                  color="white"
-                  px={3}
-                  py={1}
-                  borderRadius="full"
-                  fontSize="xs"
-                  fontWeight="bold"
-                >
-                  {adCountdown > 0
-                    ? `Reward in ${adCountdown}s`
-                    : "Reward Unlocked!"}
-                </Flex>
-              </Box>
-
-              {adCountdown > 0 ? (
-                <Button
-                  w="100%"
-                  h="14"
-                  borderRadius="xl"
-                  bg="gray.200"
-                  color="gray.400"
-                  disabled
-                >
-                  <Spinner size="sm" mr={2} /> Please wait...
-                </Button>
-              ) : (
-                <Button
-                  w="100%"
-                  h="14"
-                  borderRadius="xl"
-                  bgGradient="to-r"
-                  gradientFrom="pink.400"
-                  gradientTo="pink.500"
-                  color="white"
-                  // Inside the AD VIEWER VIEW where they click "Claim":
-                  onClick={() => {
-                    onReward(ECONOMY.AD_REWARD);
-                    handleClose();
-                  }}
-                >
-                  <Icon as={FaCheckCircle} mr={2} /> Claim 5 🔥
-                </Button>
-              )}
-            </VStack>
-          )}
-
-          {/* ========================================== */}
-          {/* VIEW 3: THE DYNAMIC POLL ENGINE */}
-          {/* ========================================== */}
-          {view === "poll" && availableSurvey && (
-            <VStack
-              gap={5}
-              textAlign="left"
-              w="100%"
-              maxH="60vh"
-              overflowY="auto"
-              px={1}
-              css={{ "&::-webkit-scrollbar": { display: "none" } }}
-            >
-              <Text
-                fontSize="xl"
-                fontWeight="900"
-                textAlign="center"
-                w="100%"
-                position="sticky"
-                top={0}
-                bg="white"
-                zIndex={2}
-                py={2}
-              >
-                {availableSurvey.title}
-              </Text>
-
-              {availableSurvey.questions.map((q) => (
-                <Box
-                  w="100%"
-                  key={q.id}
-                  bg="gray.50"
-                  p={4}
-                  borderRadius="2xl"
-                  border="1px solid"
-                  borderColor="gray.100"
-                >
-                  <Text fontSize="sm" fontWeight="bold" color="gray.800" mb={3}>
-                    {q.text}
+                    You've used your daily allowance! Refill your stamina to
+                    keep discovering campus.
                   </Text>
 
-                  {/* TYPE: TEXT */}
-                  {q.type === "text" && (
-                    <Input
-                      bg="white"
+                  <VStack gap={3} w="100%">
+                    <Button
+                      w="100%"
+                      h="14"
                       borderRadius="xl"
-                      value={String(
-                        typeof answers[q.id] === "string" ? answers[q.id] : "",
-                      )}
-                      onChange={(e) =>
-                        setAnswers({ ...answers, [q.id]: e.target.value })
+                      bg="gray.900"
+                      color="white"
+                      _hover={{ bg: "gray.800", transform: "scale(0.98)" }}
+                      onClick={triggerAd}
+                    >
+                      <Icon as={FaPlay} color="pink.400" mr={3} />
+                      Watch Ad (+{ECONOMY.AD_REWARD} ⚡)
+                    </Button>
+
+                    <Button
+                      w="100%"
+                      h="14"
+                      borderRadius="xl"
+                      bg="gray.100"
+                      color={availableSurvey ? "gray.800" : "gray.400"}
+                      _hover={
+                        availableSurvey
+                          ? { bg: "gray.200", transform: "scale(0.98)" }
+                          : {}
                       }
+                      onClick={() => setView("poll")}
+                      disabled={!availableSurvey || isCheckingSurveys}
+                    >
+                      <Icon
+                        as={FaPoll}
+                        color={availableSurvey ? "blue.400" : "gray.400"}
+                        mr={3}
+                      />
+                      {/* Updated Reward logic */}
+                      {isCheckingSurveys
+                        ? "Checking Polls..."
+                        : availableSurvey
+                          ? `Take Campus Poll (+${availableSurvey.reward} ⚡)`
+                          : "No more polls available"}
+                    </Button>
+
+                    <HStack
+                      mt={4}
+                      color="gray.400"
+                      fontSize="xs"
+                      fontWeight="bold"
+                      justify="center"
+                    >
+                      <Icon as={FaClock} />
+                      <Text>Free refill in {timeLeft}</Text>
+                    </HStack>
+                  </VStack>
+                </Dialog.Body>
+              </>
+            )}
+
+            {/* ========================================== */}
+            {/* VIEW 2: THE AD VIEWER */}
+            {/* ========================================== */}
+            {view === "ad" && activeAd && (
+              <VStack gap={4}>
+                <Text fontSize="lg" fontWeight="900">
+                  Sponsor Message
+                </Text>
+
+                <Box
+                  w="100%"
+                  h="250px"
+                  borderRadius="xl"
+                  overflow="hidden"
+                  position="relative"
+                  bg="gray.100"
+                >
+                  {/* RENDER IMAGE */}
+                  {activeAd.type === "image" && (
+                    <Image
+                      src={activeAd.src}
+                      objectFit="cover"
+                      w="100%"
+                      h="100%"
                     />
                   )}
 
-                  {/* TYPE: RADIO */}
-                  {q.type === "radio" && (
-                    <Flex wrap="wrap" gap={2}>
-                      {q.options?.map((opt) => {
-                        const isSelected = answers[q.id] === opt;
-                        return (
-                          <Box
-                            key={opt}
-                            px={4}
-                            py={2}
-                            borderRadius="lg"
-                            cursor="pointer"
-                            fontSize="xs"
-                            fontWeight="bold"
-                            transition="all 0.2s"
-                            bg={isSelected ? "pink.400" : "white"}
-                            color={isSelected ? "white" : "gray.600"}
-                            border="1px solid"
-                            borderColor={isSelected ? "pink.400" : "gray.200"}
-                            onClick={() =>
-                              setAnswers({ ...answers, [q.id]: opt })
-                            }
-                          >
-                            {opt}
-                          </Box>
-                        );
-                      })}
+                  {/* RENDER VIDEO */}
+                  {activeAd.type === "video" && (
+                    <video
+                      src={activeAd.src}
+                      autoPlay
+                      muted
+                      playsInline
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  )}
+
+                  {/* RENDER ADSENSE (Placeholder logic) */}
+                  {activeAd.type === "adsense" && (
+                    <Flex
+                      w="100%"
+                      h="100%"
+                      align="center"
+                      justify="center"
+                      direction="column"
+                      bg="gray.50"
+                    >
+                      <Text color="gray.400" fontSize="sm">
+                        Google AdSense Space
+                      </Text>
                     </Flex>
                   )}
 
-                  {/* TYPE: CHECKBOX */}
-                  {q.type === "checkbox" && (
-                    <Flex direction="column" gap={2}>
-                      {q.options?.map((opt) => {
-                        const currentSelections: string[] = (
-                          Array.isArray(answers[q.id]) ? answers[q.id] : []
-                        ) as string[];
-                        const isSelected = currentSelections.includes(opt);
-                        const isMaxedOut =
-                          q.maxSelect &&
-                          currentSelections.length >= q.maxSelect &&
-                          !isSelected;
+                  {/* OVERLAY TIMER */}
+                  <Flex
+                    position="absolute"
+                    top={2}
+                    right={2}
+                    bg="blackAlpha.700"
+                    color="white"
+                    px={3}
+                    py={1}
+                    borderRadius="full"
+                    fontSize="xs"
+                    fontWeight="bold"
+                  >
+                    {adCountdown > 0
+                      ? `Reward in ${adCountdown}s`
+                      : "Reward Unlocked!"}
+                  </Flex>
+                </Box>
 
-                        return (
-                          <Flex
-                            key={opt}
-                            w="100%"
-                            p={3}
-                            borderRadius="xl"
-                            cursor={isMaxedOut ? "not-allowed" : "pointer"}
-                            bg={isSelected ? "blue.50" : "white"}
-                            border="1px solid"
-                            borderColor={isSelected ? "blue.400" : "gray.200"}
-                            align="center"
-                            transition="all 0.2s"
-                            opacity={isMaxedOut ? 0.5 : 1}
-                            onClick={() => {
-                              if (isMaxedOut) return;
-                              let newSelections = [...currentSelections];
-                              if (isSelected)
-                                newSelections = newSelections.filter(
-                                  (item) => item !== opt,
-                                );
-                              else newSelections.push(opt);
-                              setAnswers({ ...answers, [q.id]: newSelections });
-                            }}
-                          >
-                            <Box
-                              w={4}
-                              h={4}
-                              borderRadius="sm"
-                              border="2px solid"
-                              borderColor={isSelected ? "blue.500" : "gray.300"}
-                              bg={isSelected ? "blue.500" : "transparent"}
-                              mr={3}
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              {isSelected && (
-                                <Icon
-                                  as={FaCheckCircle}
-                                  color="white"
-                                  boxSize={3}
-                                />
-                              )}
-                            </Box>
-                            <Text
-                              fontSize="xs"
-                              fontWeight="bold"
-                              color={isSelected ? "blue.900" : "gray.700"}
-                            >
-                              {opt}
-                            </Text>
-                          </Flex>
-                        );
-                      })}
-                    </Flex>
-                  )}
+                {adCountdown > 0 ? (
+                  <Button
+                    w="100%"
+                    h="14"
+                    borderRadius="xl"
+                    bg="gray.200"
+                    color="gray.400"
+                    disabled
+                  >
+                    <Spinner size="sm" mr={2} /> Please wait...
+                  </Button>
+                ) : (
+                  <Button
+                    w="100%"
+                    h="14"
+                    borderRadius="xl"
+                    bgGradient="to-r"
+                    gradientFrom="pink.400"
+                    gradientTo="pink.500"
+                    color="white"
+                    // Inside the AD VIEWER VIEW where they click "Claim":
+                    onClick={() => {
+                      onReward(ECONOMY.AD_REWARD);
+                      handleClose();
+                    }}
+                  >
+                    <Icon as={FaCheckCircle} mr={2} /> Claim 5 🔥
+                  </Button>
+                )}
+              </VStack>
+            )}
 
-                  {/* TYPE: RANKING */}
-                  {q.type === "rank" && (
-                    <VStack gap={2} w="100%">
-                      {q.options?.map((opt) => {
-                        const rankState: Record<string, string> = (
-                          typeof answers[q.id] === "object" &&
-                          !Array.isArray(answers[q.id])
+            {/* ========================================== */}
+            {/* VIEW 3: THE DYNAMIC POLL ENGINE */}
+            {/* ========================================== */}
+            {view === "poll" && availableSurvey && (
+              <VStack
+                gap={5}
+                textAlign="left"
+                w="100%"
+                maxH="60vh"
+                overflowY="auto"
+                px={1}
+                css={{ "&::-webkit-scrollbar": { display: "none" } }}
+              >
+                <Text
+                  fontSize="xl"
+                  fontWeight="900"
+                  textAlign="center"
+                  w="100%"
+                  position="sticky"
+                  top={0}
+                  bg="white"
+                  zIndex={2}
+                  py={2}
+                >
+                  {availableSurvey.title}
+                </Text>
+
+                {availableSurvey.questions.map((q) => (
+                  <Box
+                    w="100%"
+                    key={q.id}
+                    bg="gray.50"
+                    p={4}
+                    borderRadius="2xl"
+                    border="1px solid"
+                    borderColor="gray.100"
+                  >
+                    <Text
+                      fontSize="sm"
+                      fontWeight="bold"
+                      color="gray.800"
+                      mb={3}
+                    >
+                      {q.text}
+                    </Text>
+
+                    {/* TYPE: TEXT */}
+                    {q.type === "text" && (
+                      <Input
+                        bg="white"
+                        borderRadius="xl"
+                        value={String(
+                          typeof answers[q.id] === "string"
                             ? answers[q.id]
-                            : {}
-                        ) as Record<string, string>;
-                        const currentRank = rankState[opt] || "";
+                            : "",
+                        )}
+                        onChange={(e) =>
+                          setAnswers({ ...answers, [q.id]: e.target.value })
+                        }
+                      />
+                    )}
 
-                        return (
-                          <Flex
-                            key={opt}
-                            w="100%"
-                            justify="space-between"
-                            align="center"
-                            bg="white"
-                            p={2}
-                            borderRadius="xl"
-                            border="1px solid"
-                            borderColor="gray.200"
-                          >
-                            <Text
+                    {/* TYPE: RADIO */}
+                    {q.type === "radio" && (
+                      <Flex wrap="wrap" gap={2}>
+                        {q.options?.map((opt) => {
+                          const isSelected = answers[q.id] === opt;
+                          return (
+                            <Box
+                              key={opt}
+                              px={4}
+                              py={2}
+                              borderRadius="lg"
+                              cursor="pointer"
                               fontSize="xs"
                               fontWeight="bold"
-                              color="gray.700"
-                              w="60%"
+                              transition="all 0.2s"
+                              bg={isSelected ? "pink.400" : "white"}
+                              color={isSelected ? "white" : "gray.600"}
+                              border="1px solid"
+                              borderColor={isSelected ? "pink.400" : "gray.200"}
+                              onClick={() =>
+                                setAnswers({ ...answers, [q.id]: opt })
+                              }
                             >
                               {opt}
-                            </Text>
-                            <select
-                              style={{
-                                padding: "8px",
-                                borderRadius: "8px",
-                                border: "1px solid #E2E8F0",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                                width: "35%",
-                                backgroundColor: "#F7FAFC",
-                              }}
-                              value={currentRank}
-                              onChange={(e) => {
-                                const newRankState: Record<string, string> = {
-                                  ...rankState,
-                                  [opt]: e.target.value,
-                                };
+                            </Box>
+                          );
+                        })}
+                      </Flex>
+                    )}
+
+                    {/* TYPE: CHECKBOX */}
+                    {q.type === "checkbox" && (
+                      <Flex direction="column" gap={2}>
+                        {q.options?.map((opt) => {
+                          const currentSelections: string[] = (
+                            Array.isArray(answers[q.id]) ? answers[q.id] : []
+                          ) as string[];
+                          const isSelected = currentSelections.includes(opt);
+                          const isMaxedOut =
+                            q.maxSelect &&
+                            currentSelections.length >= q.maxSelect &&
+                            !isSelected;
+
+                          return (
+                            <Flex
+                              key={opt}
+                              w="100%"
+                              p={3}
+                              borderRadius="xl"
+                              cursor={isMaxedOut ? "not-allowed" : "pointer"}
+                              bg={isSelected ? "blue.50" : "white"}
+                              border="1px solid"
+                              borderColor={isSelected ? "blue.400" : "gray.200"}
+                              align="center"
+                              transition="all 0.2s"
+                              opacity={isMaxedOut ? 0.5 : 1}
+                              onClick={() => {
+                                if (isMaxedOut) return;
+                                let newSelections = [...currentSelections];
+                                if (isSelected)
+                                  newSelections = newSelections.filter(
+                                    (item) => item !== opt,
+                                  );
+                                else newSelections.push(opt);
                                 setAnswers({
                                   ...answers,
-                                  [q.id]: newRankState,
+                                  [q.id]: newSelections,
                                 });
                               }}
                             >
-                              <option value="">Rank...</option>
-                              <option value="1">1st Choice</option>
-                              <option value="2">2nd Choice</option>
-                              <option value="3">3rd Choice</option>
-                              <option value="4">4th Choice</option>
-                            </select>
-                          </Flex>
-                        );
-                      })}
-                    </VStack>
-                  )}
-                </Box>
-              ))}
+                              <Box
+                                w={4}
+                                h={4}
+                                borderRadius="sm"
+                                border="2px solid"
+                                borderColor={
+                                  isSelected ? "blue.500" : "gray.300"
+                                }
+                                bg={isSelected ? "blue.500" : "transparent"}
+                                mr={3}
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                              >
+                                {isSelected && (
+                                  <Icon
+                                    as={FaCheckCircle}
+                                    color="white"
+                                    boxSize={3}
+                                  />
+                                )}
+                              </Box>
+                              <Text
+                                fontSize="xs"
+                                fontWeight="bold"
+                                color={isSelected ? "blue.900" : "gray.700"}
+                              >
+                                {opt}
+                              </Text>
+                            </Flex>
+                          );
+                        })}
+                      </Flex>
+                    )}
 
-              <Button
-                w="100%"
-                h="14"
-                borderRadius="xl"
-                bg="blue.500"
-                color="white"
-                mt={4}
-                flexShrink={0}
-                mb={4}
-                loading={isSubmitting}
-                onClick={submitPoll}
-              >
-                Submit & Claim {availableSurvey.reward} 🔥
-              </Button>
-            </VStack>
-          )}
-        </Dialog.Content>
-      </Dialog.Positioner>
-    </Dialog.Root>
+                    {/* TYPE: RANKING */}
+                    {q.type === "rank" && (
+                      <VStack gap={2} w="100%">
+                        {q.options?.map((opt) => {
+                          const rankState: Record<string, string> = (
+                            typeof answers[q.id] === "object" &&
+                            !Array.isArray(answers[q.id])
+                              ? answers[q.id]
+                              : {}
+                          ) as Record<string, string>;
+                          const currentRank = rankState[opt] || "";
+
+                          return (
+                            <Flex
+                              key={opt}
+                              w="100%"
+                              justify="space-between"
+                              align="center"
+                              bg="white"
+                              p={2}
+                              borderRadius="xl"
+                              border="1px solid"
+                              borderColor="gray.200"
+                            >
+                              <Text
+                                fontSize="xs"
+                                fontWeight="bold"
+                                color="gray.700"
+                                w="60%"
+                              >
+                                {opt}
+                              </Text>
+                              <select
+                                style={{
+                                  padding: "8px",
+                                  borderRadius: "8px",
+                                  border: "1px solid #E2E8F0",
+                                  fontSize: "12px",
+                                  fontWeight: "bold",
+                                  width: "35%",
+                                  backgroundColor: "#F7FAFC",
+                                }}
+                                value={currentRank}
+                                onChange={(e) => {
+                                  const newRankState: Record<string, string> = {
+                                    ...rankState,
+                                    [opt]: e.target.value,
+                                  };
+                                  setAnswers({
+                                    ...answers,
+                                    [q.id]: newRankState,
+                                  });
+                                }}
+                              >
+                                <option value="">Rank...</option>
+                                <option value="1">1st Choice</option>
+                                <option value="2">2nd Choice</option>
+                                <option value="3">3rd Choice</option>
+                                <option value="4">4th Choice</option>
+                              </select>
+                            </Flex>
+                          );
+                        })}
+                      </VStack>
+                    )}
+                  </Box>
+                ))}
+
+                <Button
+                  w="100%"
+                  h="14"
+                  borderRadius="xl"
+                  bg="blue.500"
+                  color="white"
+                  mt={4}
+                  flexShrink={0}
+                  mb={4}
+                  loading={isSubmitting}
+                  onClick={submitPoll}
+                >
+                  Submit & Claim {availableSurvey.reward} 🔥
+                </Button>
+              </VStack>
+            )}
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
+      <Drawer.Root
+        placement="bottom"
+        open={isOpen}
+        onOpenChange={(e) => !e.open && handleClose()}
+      >
+        <Portal>
+          <Drawer.Backdrop backdropFilter="blur(8px)" bg="blackAlpha.600" />
+          <Drawer.Positioner>
+            <Drawer.Content
+              textAlign="center"
+              borderTopRadius="3xl"
+              bg="white"
+              w="100%"
+              maxW="md"
+              px="20px"
+              py="50px"
+            >
+              <VStack align="center" gap={"40px"}>
+                <VStack textAlign="center" gap="10px">
+                  <Text
+                    color="dark"
+                    fontFamily="heading"
+                    fontSize="23px"
+                    fontWeight="700"
+                  >
+                    Want to keep swiping?
+                  </Text>
+                  <Text color="dark" fontFamily="body" fontSize="16px">
+                    Log in with your official school email to verify your
+                    student status.
+                    <br />
+                    <Text as="span" fontWeight="500" color="primary.500">
+                      @student.funaab.edu.ng
+                    </Text>
+                  </Text>
+                </VStack>
+
+                <Button
+                  w="100%"
+                  h="60px"
+                  borderRadius="12px"
+                  border="2px solid"
+                  borderColor="primary.900"
+                  bg="white"
+                  color="dark"
+                  fontWeight="500"
+                  fontSize="22px"
+                  _hover={{ bg: "grey", transform: "scale(0.98)" }}
+                  transition="all 0.2s"
+                  // onClick={handleGoogleLogin}
+                  // loading={isLoading} // 5. Pass the loading state to the Chakra Button
+                >
+                  {/* {!isLoading && <FcGoogle size={24} />} */}
+                  Continue with Google
+                </Button>
+              </VStack>
+            </Drawer.Content>
+          </Drawer.Positioner>
+        </Portal>
+      </Drawer.Root>
+    </>
   );
 }

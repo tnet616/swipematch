@@ -1,75 +1,95 @@
-'use client';
+"use client";
 
-import { Button, Dialog, Text, VStack, Icon, Box } from '@chakra-ui/react';
-import { FcGoogle } from 'react-icons/fc';
-import { FaGraduationCap } from 'react-icons/fa'; 
-import { supabase } from '../utils/supabase';
+import { useState } from "react"; // 1. Import useState
+import { Button, Text, VStack, Drawer, Portal } from "@chakra-ui/react";
+import { FcGoogle } from "react-icons/fc";
+import { supabase } from "../utils/supabase";
 
-// Notice we removed the onClose prop. It is now a permanent hard wall once triggered.
 interface WallDialogProps {
   showWall: boolean;
 }
 
 export const WallDialog = ({ showWall }: WallDialogProps) => {
+  // 2. Add loading state
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleGoogleLogin = async () => {
+    setIsLoading(true); // 3. Set loading to true when clicked
+
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: "google",
       options: {
         redirectTo: `${window.location.origin}/onboarding`,
       },
     });
-    if (error) console.error("Auth error:", error.message);
+
+    if (error) {
+      console.error("Auth error:", error.message);
+      setIsLoading(false); // 4. Only stop loading if there is an error
+    }
   };
 
   return (
-    <Dialog.Root
+    <Drawer.Root
       open={showWall}
-      closeOnInteractOutside={false} 
-      closeOnEscape={false}          
+      placement="bottom"
+      closeOnInteractOutside={false}
+      closeOnEscape={false}
     >
-      <Dialog.Backdrop backdropFilter="blur(10px)" bg="blackAlpha.700" />
-      
-      {/* Aligning to flex-end makes it look like a sleek native bottom sheet */}
-      <Dialog.Positioner alignItems="flex-end" pb={6}> 
-        <Dialog.Content 
-          p={8} 
-          textAlign="center" 
-          borderRadius="3xl" 
-          mx={4} 
-          bg="white" 
-          boxShadow="2xl"
-          w="calc(100vw - 32px)"
-          maxW="md"
-        >
-          <VStack gap={6}>
-            <Box bg="pink.50" p={4} borderRadius="full">
-              <Icon as={FaGraduationCap} boxSize={8} color="pink.400" />
-            </Box>
+      <Portal>
+        <Drawer.Backdrop backdropFilter="blur(10px)" bg="blackAlpha.700" />
+        <Drawer.Positioner>
+          <Drawer.Content
+            textAlign="center"
+            borderTopRadius="3xl"
+            bg="white"
+            w="100%"
+            maxW="md"
+            px="20px"
+            py="50px"
+          >
+            <VStack align="center" gap={"40px"}>
+              <VStack textAlign="center" gap="10px">
+                <Text
+                  color="dark"
+                  fontFamily="heading"
+                  fontSize="23px"
+                  fontWeight="700"
+                >
+                  Want to keep swiping?
+                </Text>
+                <Text color="dark" fontFamily="body" fontSize="16px">
+                  Log in with your official school email to verify your student
+                  status.
+                  <br />
+                  <Text as="span" fontWeight="500" color="primary.500">
+                    @student.funaab.edu.ng
+                  </Text>
+                </Text>
+              </VStack>
 
-            <VStack gap={2}>
-              <Text fontSize="2xl" fontWeight="black" color="gray.900">
-                Join the Campus Ranking
-              </Text>
-              <Text color="gray.500" fontWeight="medium" fontSize="md" lineHeight="1.6">
-                Log in with your official school email to verify your student status.
-                <br />
-                <Text as="span" fontWeight="bold" color="pink.500">@student.funaab.edu.ng</Text>
-              </Text>
+              <Button
+                w="100%"
+                h="60px"
+                borderRadius="12px"
+                border="2px solid"
+                borderColor="primary.900"
+                bg="white"
+                color="dark"
+                fontWeight="500"
+                fontSize="22px"
+                _hover={{ bg: "grey", transform: "scale(0.98)" }}
+                transition="all 0.2s"
+                onClick={handleGoogleLogin}
+                loading={isLoading} // 5. Pass the loading state to the Chakra Button
+              >
+                {!isLoading && <FcGoogle size={24} />}
+                Continue with Google
+              </Button>
             </VStack>
-
-            <Button
-              w="100%" h="14" borderRadius="xl" border="1px solid" borderColor="gray.200"
-              bg="white" color="gray.800" fontWeight="bold" fontSize="md" boxShadow="sm" mt={4}
-              _hover={{ bg: 'gray.50', transform: 'scale(0.98)' }} transition="all 0.2s"
-              onClick={handleGoogleLogin}
-            >
-              <FcGoogle size={24} style={{ marginRight: '10px' }} />
-              Continue with Google
-            </Button>
-            
-          </VStack>
-        </Dialog.Content>
-      </Dialog.Positioner>
-    </Dialog.Root>
+          </Drawer.Content>
+        </Drawer.Positioner>
+      </Portal>
+    </Drawer.Root>
   );
 };
