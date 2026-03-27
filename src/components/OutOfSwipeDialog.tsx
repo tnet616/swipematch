@@ -16,6 +16,7 @@ import {
 } from "@chakra-ui/react";
 import { FaPlay, FaPoll, FaClock, FaCheckCircle } from "react-icons/fa";
 import { supabase } from "../utils/supabase";
+import { ECONOMY } from "../config/economy";
 
 interface OutOfFiresDialogProps {
   isOpen: boolean;
@@ -63,7 +64,7 @@ const SURVEYS = [
   // --- POLL 1: Demographics ---
   {
     id: "supps_q_demographics",
-    reward: 10,
+    reward: ECONOMY.POLL_REWARD,
     title: "Socio-Demographic Data",
     questions: [
       {
@@ -284,7 +285,7 @@ const SURVEYS = [
   },
 ];
 
-export default function OutOfFiresDialog({
+export default function OutOfSwipeDialog({
   isOpen,
   onClose,
   onReward,
@@ -422,13 +423,13 @@ export default function OutOfFiresDialog({
             <>
               <Dialog.Header pt={2}>
                 <Dialog.Title fontSize="2xl" fontWeight="900" color="gray.900">
-                  Out of 🔥
+                  Out of Swipes ⚡
                 </Dialog.Title>
               </Dialog.Header>
               <Dialog.Body pb={2}>
                 <Text mb={6} color="gray.500" fontWeight="medium" fontSize="sm">
-                  You've used all your Fires! Refill your stash to keep boosting
-                  your favorites.
+                  You've used your daily allowance! Refill your stamina to keep
+                  discovering campus.
                 </Text>
 
                 <VStack gap={3} w="100%">
@@ -439,10 +440,10 @@ export default function OutOfFiresDialog({
                     bg="gray.900"
                     color="white"
                     _hover={{ bg: "gray.800", transform: "scale(0.98)" }}
-                    onClick={triggerAd} // <-- BUG FIXED HERE
+                    onClick={triggerAd}
                   >
-                    <Icon as={FaPlay} color="pink.400" mr={3} /> Watch Ad (+5
-                    🔥)
+                    <Icon as={FaPlay} color="pink.400" mr={3} />
+                    Watch Ad (+{ECONOMY.AD_REWARD} ⚡)
                   </Button>
 
                   <Button
@@ -464,10 +465,11 @@ export default function OutOfFiresDialog({
                       color={availableSurvey ? "blue.400" : "gray.400"}
                       mr={3}
                     />
+                    {/* Updated Reward logic */}
                     {isCheckingSurveys
                       ? "Checking Polls..."
                       : availableSurvey
-                        ? `Take Campus Poll (+${availableSurvey.reward} 🔥)`
+                        ? `Take Campus Poll (+${availableSurvey.reward} ⚡)`
                         : "No more polls available"}
                   </Button>
 
@@ -583,8 +585,9 @@ export default function OutOfFiresDialog({
                   gradientFrom="pink.400"
                   gradientTo="pink.500"
                   color="white"
+                  // Inside the AD VIEWER VIEW where they click "Claim":
                   onClick={() => {
-                    onReward(5);
+                    onReward(ECONOMY.AD_REWARD);
                     handleClose();
                   }}
                 >

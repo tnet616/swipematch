@@ -91,9 +91,22 @@ export default function ProfilePage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
     if (user) {
-      // Because we added Cascade Delete earlier, deleting the user wipes their swipes too!
-      await supabase.from("users").delete().eq("id", user.id);
+      // 1. Delete from public.users
+      const { error: deleteError } = await supabase
+        .from("users")
+        .delete()
+        .eq("id", user.id);
+
+      if (deleteError) {
+        setIsLoading(false);
+        console.error("Delete Error:", deleteError);
+        alert(`Failed to delete profile: ${deleteError.message}`);
+        return;
+      }
+
+      // 2. Sign out and redirect
       await supabase.auth.signOut();
       router.push("/");
     }
@@ -144,13 +157,17 @@ export default function ProfilePage() {
       // ==========================================
       // 1. CLEANUP: Delete the old photo first!
       // ==========================================
-      if (profile.photo_url && profile.photo_url.includes('supabase.co/storage')) {
-        const oldFileName = profile.photo_url.split('/').pop();
+      if (
+        profile.photo_url &&
+        profile.photo_url.includes("supabase.co/storage")
+      ) {
+        const oldFileName = profile.photo_url.split("/").pop();
         if (oldFileName) {
           const { error: deleteError } = await supabase.storage
-            .from('profiles')
+            .from("profiles")
             .remove([oldFileName]);
-          if (deleteError) console.error("Failed to delete old photo:", deleteError);
+          if (deleteError)
+            console.error("Failed to delete old photo:", deleteError);
         }
       }
 
@@ -165,13 +182,13 @@ export default function ProfilePage() {
         const { data } = supabase.storage
           .from("profiles")
           .getPublicUrl(newFileName);
-        
+
         // 3. Update the database with the new URL
         await supabase
           .from("users")
           .update({ photo_url: data.publicUrl })
           .eq("id", profile.id);
-          
+
         fetchMyProfile(); // Refresh UI with new photo
       } else {
         setIsLoading(false);
@@ -228,11 +245,14 @@ export default function ProfilePage() {
         />
 
         {/* Status Banners */}
-        {!profile.is_approved && !isSpectator && (
-          <Box w="100%" bg="orange.100" p={2} textAlign="center">
-            <Text fontSize="xs" fontWeight="bold" color="orange.800">
-              <Icon as={FaExclamationTriangle} mr={2} /> Your profile is hidden
-              and under review.
+        {!profile.photo_url && !isSpectator && (
+          <Box w="100%" bg="red.100" p={3} textAlign="center">
+            <Text fontSize="sm" fontWeight="900" color="red.700">
+              <Icon as={FaExclamationTriangle} mr={2} mb="-2px" /> 
+              Action Required!
+            </Text>
+            <Text fontSize="xs" fontWeight="bold" color="red.600" mt={1}>
+              You are currently invisible in the rankings. Tap the avatar below to upload a photo to be seen by campus!
             </Text>
           </Box>
         )}
@@ -240,12 +260,10 @@ export default function ProfilePage() {
         {isSpectator && (
           <Box w="100%" bg="blue.50" p={2} textAlign="center">
             <Text fontSize="xs" fontWeight="bold" color="blue.800">
-              <Icon as={FaEye} mr={2} /> Spectator Mode: You are not visible in
-              the rankings.
+              <Icon as={FaEye} mr={2} /> Spectator Mode: You are not visible in the rankings.
             </Text>
           </Box>
         )}
-
         {/* Profile Info & Avatar */}
         <VStack gap={4} px={6} mt={6}>
           <Box
