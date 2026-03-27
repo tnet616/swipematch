@@ -12,12 +12,17 @@ const neueMontreal = localFont({
     },
     {
       path: "./fonts/NeueMontreal-Medium.woff2", // Your 200 weight file
-      weight: "200",
+      weight: "500",
       style: "normal",
     },
     {
       path: "./fonts/NeueMontreal-Regular.woff2", // Your 400 weight file
       weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./fonts/NeueMontreal-Medium.woff2", // Your 200 weight file
+      weight: "500",
       style: "normal",
     },
     {
@@ -47,7 +52,7 @@ export default function RootLayout({
       className={`${neueMontreal.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <Provider>{children}</Provider>
+        <Provider children={children}/>
       </body>
     </html>
   );

@@ -16,11 +16,9 @@ const customConfig = defineConfig({
           800: { value: "rgba(133, 40, 73, 1)" },
           900: { value: "rgba(92, 28, 51, 1)" },
         },
-        brand: {
-          dark: { value: "rgba(0, 0, 0, 1)" },
-          grey: { value: "rgba(252, 252, 252, 1)" },
-          white: { value: "rgba(255, 255, 255, 1)" },
-        },
+        dark: { value: "rgba(0, 0, 0, 1)" },      // ✅ same level as primary
+        grey: { value: "rgba(252, 252, 252, 1)" }, // ✅
+        white: { value: "rgba(255, 255, 255, 1)" },// ✅
       },
       fonts: {
         heading: { value: "var(--font-neue-montreal), Helvetica, sans-serif" },

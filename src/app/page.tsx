@@ -215,6 +215,9 @@ export default function SwipePage() {
       return;
     }
 
+    // Store the card being removed for potential revert
+    const cardToRemove = decks[activeGender].find((p) => p.id === targetId);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -391,33 +394,83 @@ export default function SwipePage() {
             </HStack>
           </VStack>
 
-          <VStack gap={6} textAlign="center" px={2}>
+          <VStack w="100%" gap="50px" textAlign="center" align="center">
             <Text
-              fontSize="3xl"
-              fontWeight="900"
-              color="black"
-              lineHeight="1.2"
+              fontSize="23px"
+              fontWeight="700"
+              color="dark"
+              lineHeight="32px"
+              fontFamily="heading"
             >
               Who do you think is the Finest boy/girl on Campus ?
             </Text>
-            <HStack gap={4} fontSize="sm" fontWeight="medium" color="gray.600">
-              <Text>Swipe 🤩</Text>
-              <Text>Rank 👩🏼</Text>
-              <Text>Flex 👦🏾</Text>
+            <HStack
+              gap="24px"
+              align="center"
+              fontSize="16px"
+              fontWeight="500"
+              color="dark"
+              fontFamily="body"
+            >
+              <HStack gap="10px" align="center">
+                <Text>Swipe</Text>
+                <Box
+                  w="40px"
+                  h="40px"
+                  bg="#E9E9E9"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  🤩
+                </Box>
+              </HStack>
+              <HStack gap="10px" align="center">
+                <Text>Rank</Text>
+                <Box
+                  w="40px"
+                  h="40px"
+                  bg="#E9E9E9"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  👩🏼
+                </Box>
+              </HStack>
+              <HStack gap="10px" align="center">
+                <Text>Flex</Text>
+                <Box
+                  w="40px"
+                  h="40px"
+                  bg="#E9E9E9"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  👦🏾
+                </Box>
+              </HStack>
             </HStack>
           </VStack>
 
-          <VStack gap={4} pb={10}>
+          <VStack gap="20px">
             <Button
               w="100%"
-              h="16"
-              borderRadius="xl"
-              fontSize="xl"
-              fontWeight="bold"
+              h="70px"
+              borderRadius="12px"
+              fontSize="28px"
+              fontWeight="500"
               color="white"
               bgGradient="to-r"
-              gradientFrom="pink.400"
-              gradientTo="pink.500"
+              gradientFrom="primary.400"
+              gradientTo="primary.500"
+              borderWidth="3px"
+              borderColor="primary.900"
+              fontFamily={"heading"}
               _hover={{ opacity: 0.9 }}
               onClick={() => setHasStarted(true)}
             >
@@ -425,14 +478,17 @@ export default function SwipePage() {
             </Button>
             <Button
               w="100%"
-              h="16"
-              borderRadius="xl"
-              fontSize="xl"
-              fontWeight="bold"
+              h="70px"
+              borderRadius="12px"
+              fontSize="28px"
+              fontWeight="500"
               color="white"
               bgGradient="to-r"
+              borderWidth="3px"
+              borderColor="primary.900"
+              fontFamily={"heading"}
               gradientFrom="orange.400"
-              gradientTo="orange.500"
+              gradientTo="#D97C2B"
               _hover={{ opacity: 0.9 }}
               onClick={handleJoinRanking}
             >
@@ -556,6 +612,7 @@ export default function SwipePage() {
         pt={6}
         pb={4}
       >
+        
         <Flex
           justify="center"
           align="center"
@@ -574,9 +631,8 @@ export default function SwipePage() {
               handleSwipe(currentDeck[currentDeck.length - 1].id, "pass");
           }}
         >
-          <Icon as={FaTimes} boxSize={8} color="#E53E3E" />
+          <FaTimes size={32} color="#E53E3E" /> {/* ✅ direct */}
         </Flex>
-
         <VStack gap={0}>
           <Flex
             justify="center"
@@ -594,7 +650,7 @@ export default function SwipePage() {
             {userFireCount !== null ? "fires left 🔥" : "swipes left"}
           </Text>
         </VStack>
-
+        
         <Flex
           justify="center"
           align="center"
@@ -613,7 +669,7 @@ export default function SwipePage() {
               handleSwipe(currentDeck[currentDeck.length - 1].id, "fire");
           }}
         >
-          <Icon as={FaFire} boxSize={8} color="#DD6B20" />
+          <FaFire size={32} color="#DD6B20" /> {/* ✅ direct */}
         </Flex>
       </HStack>
 
@@ -626,8 +682,9 @@ export default function SwipePage() {
         borderTop="1px solid"
         borderColor="gray.100"
       >
+        
         <VStack gap={1} color="pink.400" cursor="pointer">
-          <Icon as={FiHome} boxSize={6} />
+          <FiHome size={24} color="pink" />
           <Text fontSize="10px" fontWeight="bold">
             Home
           </Text>
@@ -638,7 +695,7 @@ export default function SwipePage() {
           cursor="pointer"
           onClick={() => router.push("/leaderboard")}
         >
-          <Icon as={FaTrophy} boxSize={6} />
+          <FaTrophy size={24} color="#A0AEC0" />
           <Text fontSize="10px" fontWeight="bold">
             Live Ranking
           </Text>
@@ -649,7 +706,7 @@ export default function SwipePage() {
           cursor="pointer"
           onClick={handleProfileClick}
         >
-          <Icon as={FiUser} boxSize={6} />
+          <FiUser size={24} color="#A0AEC0" />
           <Text fontSize="10px" fontWeight="bold">
             Profile
           </Text>
